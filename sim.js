@@ -1,6 +1,6 @@
 //nbody simulation
 
-var mouseStart, creating, bodies, mass;
+var mouseStart, creating, bodies, mass, playing;
 
 var speedMult = 1/60;
 
@@ -9,6 +9,7 @@ function setup() {
     stroke(0, 100, 0);
     bodies = [];
     mass = 1;
+    playing = false;
 }
 
 
@@ -23,7 +24,9 @@ function draw() {
     }
 
     for(i=0;i<bodies.length;i++){
-	bodies[i].update(bodies);
+	if(playing){
+	    bodies[i].update(bodies);
+	}
 	bodies[i].draw();
     }
 }
@@ -47,7 +50,7 @@ function body(position, velocity, mass) {
     }
 
     this.draw = function(){
-	ellipse(this.pos.x, this.pos.y, this.mass*5, this.mass*5);
+	ellipse(this.pos.x, this.pos.y, this.mass+5, this.mass+5);
     }
 }
 
@@ -99,5 +102,11 @@ function vec2(x, y){
     this.normalized = function(){
 	mag = this.mag();
 	return new vec2(this.x/mag, this.y/mag);
+    }
+}
+
+function keyPressed(){
+    if(keyCode==32){
+	playing = !playing;
     }
 }
