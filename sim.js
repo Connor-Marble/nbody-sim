@@ -1,6 +1,6 @@
 //nbody simulation
 
-var mouseStart, creating, bodies, mass, playing;
+var mouseStart, creating, bodies, mass, playing, framecount;
 
 var speedMult = 1/60;
 
@@ -10,15 +10,35 @@ function setup() {
     bodies = [];
     mass = 1;
     playing = false;
+    framecount = 0;
+
+    makeFixedBody();
+
 }
 
+//create fixed body;
+function makeFixedBody(){
+
+    position = new vec2(windowWidth/2, windowHeight/2);
+    fixedBody = new body(position, new vec2(0,0), 400);
+
+    fixedBody.update = function(){};
+
+    fixedBody.draw = function(){
+	ellipse(this.pos.x, this.pos.y, 20, 20);
+    };
+
+    bodies.push(fixedBody);
+}
 
 function draw() {
+    framecount++;
     background(0);
     fill(255);
-    
-    text("Mass: " + mass, 10, 10);
+    drawInfo();
 
+    stroke(0, 100, 0);
+    
     if(creating){
 	line(mouseX, mouseY, mouseStart.x, mouseStart.y);
     }
@@ -31,7 +51,20 @@ function draw() {
     }
 }
 
+function drawInfo(){
+    text("Mass: " + mass, 10, 10);
+    text("Bodies: " + bodies.length, 10, 20);
+    if(!playing){
+	stroke(100, 0, 0);
+    }
+
+    else stroke(0, 100, 0);
+    
+    text("Simulation "+(playing?"running":"paused"), 10, 30)
+}
+
 function body(position, velocity, mass) {
+    this.prev = []
     this.pos = position;
     this.vel = velocity;
     this.mass = mass;
@@ -40,17 +73,24 @@ function body(position, velocity, mass) {
 	for(var i=0;i<bodies.length;i++){
 	    if(bodies[i]!=this){
 		seperation = new vec2(this.pos.x - bodies[i].pos.x, this.pos.y - bodies[i].pos.y);
-		strength = -(this.mass*bodies[i].mass)/Math.pow(seperation.mag(), 2);
+		strength = -(bodies[i].mass)/Math.pow(seperation.mag(), 2);
 		force = seperation.normalized().mul(strength);
 		this.vel.add(force);
 	    }
 	}
-	
+	if(framecount%10 ==0){
+	    this.prev.push(new vec2(this.pos.x, this.pos.y))
+	}
 	this.pos.add(this.vel);
     }
 
     this.draw = function(){
-	ellipse(this.pos.x, this.pos.y, this.mass+5, this.mass+5);
+	for(j=1;j<this.prev.length;j++){
+	    line(this.prev[j-1].x, this.prev[j-1].y, this.prev[j].x, this.prev[j].y);
+	}
+	if(this.prev.length>0){
+	    line(this.prev[this.prev.length-1].x, this.prev[this.prev.length-1].y, this.pos.x, this.pos.y);
+	}
     }
 }
 
