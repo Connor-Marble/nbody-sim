@@ -26,7 +26,7 @@ function setup() {
 function makeFixedBody(){
 
     position = new vec2(windowWidth/2, windowHeight/2);
-    fixedBody = new body(position, new vec2(0,0), 400, EULER);
+    fixedBody = new body(position, new vec2(0,0), 400, -1);
 
     fixedBody.update = function(){};
 
@@ -81,14 +81,16 @@ function body(position, velocity, mass, type) {
     this.pos = position;
     this.vel = velocity;
     this.mass = mass;
+
+    //for verlet
+    this.previousPos = null;
+    this.acceleration = new vec2(0,0);
+    
     this.update = function(bodies){
 
 	for(var i=0;i<bodies.length;i++){
-	    if(bodies[i]!=this){
-		seperation = new vec2(this.pos.x - bodies[i].pos.x, this.pos.y - bodies[i].pos.y);
-		strength = -(bodies[i].mass)/Math.pow(seperation.mag(), 2);
-		force = seperation.normalized().mul(strength);
-		this.vel.add(force);
+	    if(bodies[i]!=this && (bodies[i].type==this.type || bodies[i].type == -1)){
+		this.applyGrav(bodies[i]);
 	    }
 	}
 	if(this.prev.length>0){
@@ -97,10 +99,47 @@ function body(position, velocity, mass, type) {
 	    }
 	}
 	else this.prev.push(new vec2(this.pos.x, this.pos.y));
-	
-	this.pos.add(this.vel);
+
+	if(type == EULER){
+	    this.pos.add(this.vel);
+	}
+
+	if(type == VERLET){
+	    
+	    if(this.previousPos == null){
+		this.previousPos = this.pos.clone();
+		this.previousPos.sub(this.vel).add(this.acceleration);
+	    }
+
+	    var temp = this.pos.clone();
+	    this.pos.mul(2);
+	    this.pos.sub(this.previousPos);
+	    this.pos.add(this.acceleration);
+	    this.previousPos = temp;
+	    this.acceleration = new vec2(0, 0);
+	}
+	    
     }
 
+    this.applyGrav = function(body){
+	if(type == EULER){
+	    seperation = new vec2(this.pos.x - body.pos.x, this.pos.y - body.pos.y);
+	    strength = -(body.mass)/Math.pow(seperation.mag(), 2);
+	    force = seperation.normalized().mul(strength);
+	    this.vel.add(force);
+	}
+
+	if(type == VERLET){
+	    seperation = new vec2(this.pos.x - body.pos.x, this.pos.y - body.pos.y);
+	    strength = -(body.mass)/Math.pow(seperation.mag(), 2);
+	    force = seperation.normalized().mul(strength);
+	    this.acceleration.add(force);
+
+	}
+
+	if(type == RK4){}
+    }
+    
     this.draw = function(){
 	if(this.type == EULER)
 	    stroke(255, 0, 0, 100);
@@ -141,7 +180,10 @@ function mouseReleased(){
     creating = false;
     velocity = new vec2(mouseX, mouseY);
     velocity.sub(mouseStart).mul(speedMult);
-    bodies.push(new body(mouseStart, velocity, mass, EULER));
+    
+    bodies.push(new body(mouseStart.clone(), velocity.clone(), mass, EULER));
+    bodies.push(new body(mouseStart.clone(), velocity.clone(), mass, RK4));
+    bodies.push(new body(mouseStart.clone(), velocity.clone(), mass, VERLET));
 }
 
 function mouseWheel(event){
@@ -188,6 +230,10 @@ function vec2(x, y){
 
 	var dist =  Math.sqrt(Math.pow(xDist, 2) + Math.pow(yDist, 2));
 	return dist;
+    }
+
+    this.clone = function(){
+	return new vec2(this.x, this.y);
     }
 }
 
