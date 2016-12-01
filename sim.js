@@ -4,6 +4,10 @@ var mouseStart, creating, bodies, mass, playing, framecount;
 
 var speedMult = 1/60;
 
+EULER = 0;
+VERLET = 1;
+RK4 = 2;
+
 function setup() {
     createCanvas(windowWidth, windowHeight);
     stroke(0, 100, 0);
@@ -14,13 +18,15 @@ function setup() {
 
     makeFixedBody();
 
+    blendMode(BLEND);
+
 }
 
 //create fixed body;
 function makeFixedBody(){
 
     position = new vec2(windowWidth/2, windowHeight/2);
-    fixedBody = new body(position, new vec2(0,0), 400);
+    fixedBody = new body(position, new vec2(0,0), 400, -1);
 
     fixedBody.update = function(){};
 
@@ -33,17 +39,20 @@ function makeFixedBody(){
 
 function draw() {
     framecount++;
-    background(0);
-    fill(255);
+    background(0, 0, 0, 255);
+    
+    stroke(0, 100, 0);
+    fill(200);
     drawInfo();
-
     stroke(0, 100, 0);
     
     if(creating){
 	line(mouseX, mouseY, mouseStart.x, mouseStart.y);
     }
 
-    for(i=0;i<bodies.length;i++){
+    stroke(200, 0, 200);
+    
+    for(var i=0;i<bodies.length;i++){
 	if(playing){
 	    bodies[i].update(bodies);
 	}
@@ -59,38 +68,106 @@ function drawInfo(){
     }
 
     else stroke(0, 100, 0);
-    
     text("Simulation "+(playing?"running":"paused"), 10, 30)
+
+    stroke(0, 100, 0);
+    text("Press c to clear paths", 10, 40);
+    text("press r to reset", 10, 50);
 }
 
-function body(position, velocity, mass) {
+function body(position, velocity, mass, type) {
+    this.type = type;
     this.prev = []
     this.pos = position;
     this.vel = velocity;
     this.mass = mass;
+
+    //for verlet
+    this.previousPos = null;
+    this.acceleration = new vec2(0,0);
+    
     this.update = function(bodies){
 
 	for(var i=0;i<bodies.length;i++){
-	    if(bodies[i]!=this){
-		seperation = new vec2(this.pos.x - bodies[i].pos.x, this.pos.y - bodies[i].pos.y);
-		strength = -(bodies[i].mass)/Math.pow(seperation.mag(), 2);
-		force = seperation.normalized().mul(strength);
-		this.vel.add(force);
+	    if(bodies[i]!=this && (bodies[i].type==this.type || bodies[i].type == -1)){
+		this.applyGrav(bodies[i]);
 	    }
 	}
-	if(framecount%10 ==0){
-	    this.prev.push(new vec2(this.pos.x, this.pos.y))
+	if(this.prev.length>0){
+	    if(this.pos.distTo(this.prev[this.prev.length-1])>15){
+		this.prev.push(new vec2(this.pos.x, this.pos.y))
+	    }
 	}
-	this.pos.add(this.vel);
+	else this.prev.push(new vec2(this.pos.x, this.pos.y));
+
+	if(type == EULER){
+	    this.pos.add(this.vel);
+	}
+
+	if(type == VERLET){
+	    
+	    if(this.previousPos == null){
+		this.previousPos = this.pos.clone();
+		this.previousPos.sub(this.vel).add(this.acceleration);
+	    }
+
+	    var temp = this.pos.clone();
+	    this.pos.mul(2);
+	    this.pos.sub(this.previousPos);
+	    this.pos.add(this.acceleration);
+	    this.previousPos = temp;
+	    this.acceleration = new vec2(0, 0);
+	}
+	    
     }
 
+    this.applyGrav = function(body){
+	if(type == EULER){
+	    seperation = new vec2(this.pos.x - body.pos.x, this.pos.y - body.pos.y);
+	    strength = -(body.mass)/Math.pow(seperation.mag(), 2);
+	    force = seperation.normalized().mul(strength);
+	    this.vel.add(force);
+	}
+
+	if(type == VERLET){
+	    seperation = new vec2(this.pos.x - body.pos.x, this.pos.y - body.pos.y);
+	    strength = -(body.mass)/Math.pow(seperation.mag(), 2);
+	    force = seperation.normalized().mul(strength);
+	    this.acceleration.add(force);
+
+	}
+
+	if(type == RK4){}
+    }
+    
     this.draw = function(){
-	for(j=1;j<this.prev.length;j++){
+	if(this.type == EULER)
+	    stroke(255, 0, 0, 100);
+
+	if(this.type == VERLET)
+	    stroke(0, 0, 255, 100);
+
+	if(this.type == RK4)
+	    stroke(0, 255, 0, 100);
+	    
+	for(var j=1;j<this.prev.length;j++){
 	    line(this.prev[j-1].x, this.prev[j-1].y, this.prev[j].x, this.prev[j].y);
 	}
 	if(this.prev.length>0){
 	    line(this.prev[this.prev.length-1].x, this.prev[this.prev.length-1].y, this.pos.x, this.pos.y);
 	}
+
+	if(!playing){
+	    ellipse(this.pos.x, this.pos.y, 5, 5);
+	    line(this.pos.x,
+		 this.pos.y,
+		 this.pos.x+this.vel.x*10,
+		 this.pos.y+this.vel.y*10);
+	}
+    }
+
+    this.clearPath = function(){
+	this.prev = [];
     }
 }
 
@@ -103,7 +180,10 @@ function mouseReleased(){
     creating = false;
     velocity = new vec2(mouseX, mouseY);
     velocity.sub(mouseStart).mul(speedMult);
-    bodies.push(new body(mouseStart, velocity, mass));
+    
+    bodies.push(new body(mouseStart.clone(), velocity.clone(), mass, EULER));
+    bodies.push(new body(mouseStart.clone(), velocity.clone(), mass, RK4));
+    bodies.push(new body(mouseStart.clone(), velocity.clone(), mass, VERLET));
 }
 
 function mouseWheel(event){
@@ -143,10 +223,32 @@ function vec2(x, y){
 	mag = this.mag();
 	return new vec2(this.x/mag, this.y/mag);
     }
+
+    this.distTo = function(other){
+	var xDist = this.x - other.x;
+	var yDist = this.y - other.y;
+
+	var dist =  Math.sqrt(Math.pow(xDist, 2) + Math.pow(yDist, 2));
+	return dist;
+    }
+
+    this.clone = function(){
+	return new vec2(this.x, this.y);
+    }
 }
 
 function keyPressed(){
     if(keyCode==32){
 	playing = !playing;
+    }
+
+    if(keyCode == 67){
+	for(var i =0;i<bodies.length;i++){
+	    bodies[i].clearPath();
+	}
+    }
+
+    if(keyCode == 82){
+	bodies = [bodies[0]];
     }
 }
